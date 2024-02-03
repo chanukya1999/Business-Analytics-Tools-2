@@ -1,0 +1,82 @@
+  /* Chicago Housing Data */
+
+/* Step1 : Import Data */
+filename webdata url
+  "https://bigblue.depaul.edu/jlee141/econdata/housing/mls2018_smpl.csv" ;
+/* Create mls_2018 */
+  proc import datafile=webdata out=mls_2018 dbms=csv replace ; run ;
+
+  proc contents data=mls_2018 ; run ;
+
+/* Sort and print data */
+  proc sort data=mls_2018 ; by ZIP houseid ; run ;
+  proc print data=mls_2018 ; where zip = 60002 ; run ;
+
+/* Frequencies */
+Proc freq data = mls_2018 ;
+     tables bedroom bathroom fireplace garage sold_30day ;
+     run ;  
+/* Frequencies by */
+Proc freq data = mls_2018 ;
+     tables zip*sold_30day ;
+     run ;  
+
+/* Proc means for basic descriptive stat */
+Proc means data=mls_2018 ;
+ run ;
+
+/* Proc Summary */
+ proc summary data=mls_2018 print n mean median stdev ;
+      var hprice ;
+ run ; 
+ proc summary data=mls_2018 print n mean median stdev ;
+      var hprice ; class bedroom ;
+ run ; 
+
+ /* Proc Summary and output data */
+ proc summary data=mls_2018 print n mean median stdev ;
+      var hprice ; class zip ;
+	  output out=hp_zip median=mid_hprice ;
+ run ; 
+ proc print data=hp_zip; run;
+
+/* Creating variable using conditional sentence */
+ data hp_zip ; set hp_zip ;   /* read hp_zip and create hp_zip --> replacing */
+      if zip= . then delete ; /* if zip is missing drop it */
+      if mid_hprice < 200000 then AREA = 1 ;
+      else if 200000 <= mid_hprice < 400000 then AREA = 2;
+      else AREA = 3 ;
+      keep zip mid_hprice AREA ;
+  run;
+  proc print data=hp_zip ; run ; 
+  proc freq  data=hp_zip ; tables AREA ; run ;
+
+  /* Graphs */
+  proc sgplot data=mls_2018 ;
+  scatter x = sqft y = hprice ;
+  run;
+
+  proc sgplot data=mls_2018 ;
+  vbar bedroom ;
+  run;  
+
+  proc sgplot data=mls_2018 ;
+  histogram sqft ;
+  run; 
+
+  proc sgplot data=mls_2018 ;
+  histogram hprice ;
+  run; 
+
+  /* mls_2018 hp_zip two dataset */
+
+  proc sort data=mls_2018 ; by zip ; run ;
+  proc sort data=hp_zip ; by zip ; run ;
+
+  data mls_2018a ; merge mls_2018 hp_zip ; by zip ; run ;
+  proc print data=mls_2018a(obs=20) ; run ;
+
+  proc summary data=mls_2018a print mean median stddev ; 
+    var hprice ; class AREA ; run ;
+
+  

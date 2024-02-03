@@ -1,0 +1,174 @@
+/* Read Data from bigblue */
+Filename webdata url "https://bigblue.depaul.edu/jlee141/econdata/eco520/liquor_sales.csv";
+proc import datafile=webdata out= sales dbms=csv replace ;
+run ;
+/* Create your own random sample data. Make sure type your student ID as seed number
+Replace your_depaul_id with your student id (only numbers) */
+proc surveyselect data=sales method=srs seed = 2124485
+n = 25000 out=mysales ;
+run;
+
+/*1)*/
+
+/* 1. Total sale Amount and Bottles Sold by City */
+proc means data = mysales sum nway;
+var Sale_amount Sold_bottles ; class City ;
+output out = sales_per_city ;
+run ;
+
+proc sgplot data = sales_per_city ;
+vbar city / response = Sale_amount stat=sum ;  yaxis label = "Total Sales" ;
+run ;
+proc sgplot data = sales_per_city ;
+vbar city / response = Sold_bottles ; yaxis label = "Bottles Sold" ;
+run ;
+
+/* 2. Total sale Amount and Bottles Sold by Month */
+
+proc means data = mysales sum ;
+var Sale_amount Sold_bottles ; class Month ;
+output out =  sales_per_month ;
+run ;
+
+proc sgplot data = sales_per_month ;
+vbar Month / response = Sale_amount ; yaxis label = "Total Sales" ;
+run ;
+proc sgplot data = sales_per_month ;
+vbar Month / response = Sold_bottles ; yaxis label = "Bottles Sold" ;
+run ;
+
+/* 3. Total sale Amount and Bottles Sold by Month */
+
+proc means data = mysales sum nway;
+var Sale_amount Sold_bottles ; class Vendor ;
+output out = sales_per_vendor ;
+run ;
+
+proc sgplot data = sales_per_vendor ;
+vbar Vendor / response = Sale_amount ; yaxis label = "Total Sales" ;
+run ;
+proc sgplot data = sales_per_vendor ;
+vbar Vendor / response = Sold_bottles ; yaxis label = "Bottles Sold" ;
+run ;
+
+/*2)*/
+/*1. Five Most Valuable Cities by Sales */
+
+proc summary data = mysales sum ;
+var Sale_amount Sold_bottles ;
+class city ;
+output out = Top_cities_sales sum = Sale_amount Sold_bottles ;
+run ;
+proc sort data = Top_cities_sales ;
+by DESCENDING Sale_amount ; run ;
+proc print data = Top_cities_sales(obs=5) ; run ;
+/* Five most valuable cities by bottles sold */
+proc sort data = Top_cities_sales ;
+by DESCENDING Sold_bottles ; run ;
+proc print data = Top_cities_sales(obs=5) ; run ;
+
+/* There is a missing value in the output of the above code. To exclude that the code is below */
+
+proc summary data = mysales sum ;
+var Sale_amount Sold_bottles ;
+class city ;
+output out = Top_cities_sales sum = Sale_amount Sold_bottles ;
+run ;
+proc sort data = Top_cities_sales ;
+by DESCENDING Sale_amount ; run ;
+proc print data = Top_cities_sales(obs=5) ; where city NE ' ' ; run ;
+/* 2. Five most valuable cities by bottles sold */ 
+proc sort data = Top_cities_sales ;
+by DESCENDING Sold_bottles ; run ;
+proc print data = Top_cities_sales(obs=5) ; where city NE ' ' ; run ;
+
+/*Five Most Valuable Vendor by Sales */
+
+proc summary data = mysales sum ;
+var Sale_amount Sold_bottles ;
+class Vendor ;
+output out = Top_vendor_sales sum = Sale_amount Sold_bottles ;
+run ;
+proc sort data = Top_vendor_sales ;
+by DESCENDING Sale_amount ; run ;
+proc print data = Top_vendor_sales(obs=5) ; run ;
+/* Five most valuable Vendor by bottles sold */
+proc sort data = Top_vendor_sales ;
+by DESCENDING Sold_bottles ; run ;
+proc print data = Top_vendor_sales(obs=5) ; run ;
+
+/* There is a missing value for the above data. To exclude that the code is below */
+
+proc summary data = mysales sum ;
+var Sale_amount Sold_bottles ;
+class Vendor ;
+output out = Top_vendor_sales sum = Sale_amount Sold_bottles ;
+run ;
+proc sort data = Top_vendor_sales ;
+by DESCENDING Sale_amount ; run ;
+proc print data = Top_vendor_sales(obs=5) ; where Vendor NE . ; run ;
+/* Five most valuable Vendor by bottles sold */
+proc sort data = Top_vendor_sales ;
+by DESCENDING Sold_bottles ; where Vendor NE . ; run ;
+proc print data = Top_vendor_sales(obs=5) ; run ;
+
+/* 3) Outliers of Data */
+/*1.*/
+proc univariate data = mysales ;
+var Sold_vol Sold_bottles ;
+run ;
+proc sgplot data = mysales ; vbox Sold_vol ; run ;
+proc sgplot data = mysales ;; vbox Sold_bottles ; run ;
+/* Comment: Extreme outliers are noticeable in both Sold_vol and Sold_bottles that needs
+	to be taken care of when analyzing the data */
+
+/* 2.Outliers of Stores */
+
+proc summary data = mysales sum; 
+var Sale_amount ; class Store_number ;
+output out = Total_store_sales sum = Total_sales ;
+run ;
+proc univariate data = Total_store_sales ;
+var Total_sales ; run ;
+
+/* 4) Creating subset of data */
+
+data city_sales ; set mysales ;
+if city = 'DES MOINES' or city = 'DAVENPORT' ;
+if month = 6 or month = 7 or month = 8 then Summer = 1 ;
+else Summer = 0 ; 
+run ;
+
+/* The probability that a sale was made in DAVENPORT */
+
+proc freq data = city_sales ; table city; run ;
+/*Ans) 0.3110 */
+
+/* The probability that a sale was made during the summer months (Jun, July, August) */
+
+proc freq data = city_sales ; table city*summer  ; run ;
+/*Ans)The probability that a sale was made during the summer months is 0.3188  */
+
+/* The probability that a sale was made in DAVENPORT during the summer months */
+
+proc freq data = city_sales ; where city = 'DAVENPORT' ;
+table city*summer ; run ;
+/*Ans)The probability that a sale was made in DAVENPORT during the summer months is 0.3036*/
+
+/* The probability that a sale was made during the summer months among all sales in DAVENPORT.*/
+
+proc freq data = city_sales ; where city = 'DAVENPORT' ;
+table summer*city ; run ;
+/*Ans)The probability that a sale was made during the summer months among all sales in DAVENPORT is 0.3036 */
+
+
+/* 5) Hypothesis Tests */
+
+proc ttest data = city_sales ;
+var Sale_amount ; class city ;
+run ;
+/* Comment : The average ofn sales amount are different for both based obn the ttest results. */
+
+proc anova data = city_sales ; class Month ;
+model Sale_amount = Month ; run ; 
+/* Comment: There is no significant difference in the average sales amount by month */

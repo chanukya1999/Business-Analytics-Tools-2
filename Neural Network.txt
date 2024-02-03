@@ -1,0 +1,74 @@
+source("http://bigblue.depaul.edu/jlee141/econdata/R/func_lib.R")
+
+airline <- read.csv("https://bigblue.depaul.edu/jlee141/econdata/BTS/flight_delay_2004_2019.csv")
+
+str(airline)
+
+
+airline<- subset(airline, select = -X)
+
+airline$year = as.factor(airline$year)
+airline$X.month = as.factor(airline$X.month)
+airline$carrier = as.factor(airline$carrier)
+airline$carrier_name = as.factor(airline$carrier_name)
+airline$airport = as.factor(airline$airport)
+airline$airport_name = as.factor(airline$airport_name)
+
+airline$year = as.numeric(as.factor(airline$year))
+airline$X.month = as.numeric(as.factor(airline$X.month))
+airline$carrier = as.numeric(as.factor(airline$carrier))
+airline$carrier_name = as.numeric(as.factor(airline$carrier_name))
+airline$airport = as.numeric(as.factor(airline$airport))
+airline$airport_name = as.numeric(as.factor(airline$airport_name))
+
+indata <- airline
+
+indata$delayed <- ifelse(indata$arr_del15 > 30, 1, 0)
+
+indata<- na.omit(indata)
+
+indata$delayed = as.factor(indata$delayed)
+
+str(indata)
+
+
+set.seed(1234)
+
+train_idx = sample(c(TRUE, FALSE), nrow(indata), replace = TRUE, prob = c(0.7,0.3))
+
+train <- indata[train_idx,]
+
+test <- indata[!train_idx,]
+
+testy <- test$delayed
+
+dim(test)
+dim(train)
+
+library(neuralnet)
+
+
+nnet1 <- neuralnet(delayed~ nas_ct + carrier_ct, data= train, stepmax = 1e+06)
+
+plot(nnet1)
+pred1 <- predict(nnet1,test)
+pred1 <- pred1[,2]
+conf_table(pred1,testy,"NeuralNet")
+auc_plot(pred1,testy,"Neural Network Model-simple") #1
+
+nnet2 <- neuralnet(delayed~ nas_ct + X.weather_ct + security_ct + late_aircraft_ct + carrier_ct, data= train,hidden = c(4,2), stepmax = 1e+06)
+
+plot(nnet2)
+pred2 <- predict(nnet2,test)
+pred2 <- pred2[,2]
+conf_table(pred2,testy,"NeuralNet")
+auc_plot(pred2,testy,"Neural Network Model") #2
+#
+nnet3 <- neuralnet(delayed~ nas_ct + X.weather_ct + security_ct + late_aircraft_ct + carrier_ct , data= train,hidden = c(5), stepmax = 1e+06)
+
+plot(nnet3)
+pred3 <- predict(nnet3,test)
+pred3 <- pred3[,2]
+conf_table(pred3,testy,"NeuralNet")
+auc_plot(pred3,testy,"Neural Network Model")
+

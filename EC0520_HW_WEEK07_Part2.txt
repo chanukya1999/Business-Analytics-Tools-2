@@ -1,0 +1,115 @@
+# MLS 2021 Chicago House Price in R
+
+# if you use Rstudio in bigblue server, use the following code
+
+house1 <- read.csv("/var/www/html/jlee141/econdata/housing/mls2020_sample.csv")
+
+
+# if you use your own local Rstudio, use the following code
+
+# house1 <- read.csv("https://bigblue.depaul.edu/jlee141/econdata/housing/mls2020_sample.csv")
+
+
+# Converting to a category variable
+
+house1$ZIP <- as.factor(house1$ZIP)
+
+# Creating a logical variable
+
+house1$sold <- as.logical(house1$SOLD_30DAY)
+
+# Creating a numerical variable
+
+house1$AGESQ <- (house1$AGEBLD^2)
+
+# find available zip codes, and select a ZIP code and save as indata
+
+table(house1$ZIP)
+
+indata <- subset(house1,ZIP == "60005") # Make sure to choose your own zip code
+
+# 1(a) Summary Statisics
+summary(house1)
+
+#Missing Values
+sum(is.na(house1))
+# There are no missing values
+table(is.na(house1))
+
+# 1(b) Histogram Plots
+hist(house1$LOG_PRICE)
+#The graph shows the distribution of house prices in the United States, where the prices are in log scale. 
+#The x-axis shows the log of house price, and the y-axis shows the frequency.
+#The graph is right-skewed, which means that there are more houses at the lower end of the price range than at the higher end. 
+
+hist(house1$AGEBLD)
+# The histogram shows the distribution of the age of houses in the United States. The x-axis shows the age of the house in years, 
+#and the y-axis shows the frequency.
+
+hist(house1$AGESQ)
+# The histogram shows the distribution of house prices in the United States, where the prices are in log scale. 
+# The x-axis shows the log of house price, and the y-axis shows the frequency.
+
+
+
+# 1(c) Scatter Plot
+plot(house1$LOG_PRICE, house1$LOG_SQFT, main = "log of house price vs log of square feet",
+     xlab = "log of house price", ylab = "log of square feet",
+     pch = 19, frame = FALSE)
+abline(lm(house1$LOG_SQFT ~ house1$LOG_PRICE, data = house1), col = "red")
+#The scatter plot shows a positive correlation between the log of house price and the log of square feet.
+#This means that as the size of a house increases,
+#its price also tends to increase, although the relationship is not perfectly linear. 
+
+# 1(d) median price by the bedroom size
+tapply(house1$HPRICE, house1$BEDROOM, median)
+# 1      2      3      4      5      6      7      8 
+# 102500 148500 227000 330000 425000 553000 670000 815000 
+
+# The mean price by the zip code
+tapply(house1$HPRICE, house1$ZIP, mean)
+
+# 2) Train and Test Data
+set.seed(2124485)
+train_ind <- sample(nrow(house1),round(0.8*nrow(house1)))
+train <- house1[train_ind,]
+test <- house1[-train_ind,]
+
+
+#Model1 : LOG_PRICE= b0 + b1 LOG_SQFT + e
+#Model2 : LOG_PRICE= b0 + b1 LOG_SQFT + b2 BEDROOM + b3 BATHROOM + e
+#Model3 : LOG_PRICE= b0 + b1 LOG_SQFT + b2 BEDROOM + b3 BATHROOM + b4 GARAGE
+# + b5 FIREPLACE+ b6 AGEBLD + b7 AGESQ + b8 SOLD_30DAY + e
+#Model4 : Model 3 with stepwise and direction = both 
+# Regression Models
+model1 <- lm(LOG_PRICE~LOG_SQFT,data=train)
+e1 <- residuals(model1,newdata = test)
+mse1 <- mean(e1^2)
+rmse1 <- mse1^0.5
+rmse1
+# RMSE = 0.5461902
+
+model2 <- lm(LOG_PRICE~LOG_SQFT+BEDROOM+BATHROOM,data=train)
+e2 <- residuals(model2,newdata = test)
+mse2 <- mean(e2^2)
+rmse2 <- mse2^0.5
+rmse2
+# RMSE =  0.5185305
+
+model3 <-  lm(LOG_PRICE~LOG_SQFT+BEDROOM+BATHROOM+GARAGE+FIREPLACE+AGEBLD+AGESQ+SOLD_30DAY, data=train)
+e3 <- residuals(model3,newdata = test)
+mse3 <- mean(e3^2)
+rmse3 <- mse3^0.5
+rmse3
+# RMSE =  0.5112254
+
+model4 <- step(lm(LOG_PRICE~LOG_SQFT+BEDROOM+BATHROOM+GARAGE+FIREPLACE+AGEBLD+AGESQ+SOLD_30DAY,
+                  data=train),direction="both")
+e4 <- residuals(model4,newdata = test)
+p4 <- predict(model4, newdata = test)
+mse4 <- mean(e4^2)
+rmse4 <- mse4^0.5
+rmse4
+# RMSE = 0.5112301
+
+# Model 3 gives the best performance on the prediction with an RMSE value of 0.5112254

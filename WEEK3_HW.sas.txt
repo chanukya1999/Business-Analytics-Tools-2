@@ -1,0 +1,387 @@
+/* Read Data from bigblue */
+filename webdat url 
+    "https://bigblue.depaul.edu/jlee141/econdata/eco520/online_retail.csv" ;
+PROC IMPORT DATAFILE= webdat OUT= online_retail
+     DBMS=CSV REPLACE;
+RUN;
+
+/* Create your own random sample data. Make sure type your student ID as seed number 
+Replace your_depaul_id with your student id (only numbers) */
+proc surveyselect data=online_retail method=srs seed = 2124485
+n = 10000 out=mysales ;
+run;
+
+data sales1  ; set mysales ; 
+   date = datepart(Invoicedate) ;
+   yearmm = year(date)*100+month(date) ;
+   totalsale = UnitPrice*Quantity ;
+   logtotal = log(totalsale) ; 
+   month = month(date) ;
+   quarter = qtr(date) ; 
+   itemID = 1*substr(StockCode,1,4) ;
+   if itemID = . then delete ;
+   L_date = '31DEC2011'D ;
+   format date l_date mmddyy10.     ;
+   if country = "United Kingdom" then UK = 1 ; else UK = 0 ;
+   if totalsale = . then delete  ;
+ run ;
+proc means ; run ; 
+/*Creating the Customer summary table by applying proc sql query */
+PROC SQL;
+Create table Customer_summary as
+   select distinct CustomerID,
+       max(Date) as Recent_date format = date9.,
+       (L_Date - max(Date)) as Recency ,
+       count(InvoiceDate) as Frequency,
+       log(Sum(totalsale)) as Monetary format=dollar15.2
+   from sales1 
+   group by CustomerID;
+quit;
+proc means data=Customer_summary ; run ;
+
+/* Basic Graphs */
+
+proc sgplot data=customer_summary ;
+scatter x = Monetary y = Recency;
+run ;
+
+proc sgplot data=customer_summary ;
+scatter x = Recency y = Frequency;
+run ;
+
+proc sgplot data = customer_summary ;
+scatter x = monetary y = frequency ; 
+run ;
+
+/* Check for and handle outliers */
+proc univariate data=Customer_summary;
+   var Recency Frequency Monetary;
+   /* You can use PROC UNIVARIATE to identify and deal with outliers */
+run;
+
+/*Hierarchical Clustering */
+
+proc cluster data= customer_summary method=ward out = cls_summ print=10 ccc pseudo;
+var Recency Frequency Monetary ;
+id customerID;
+copy Recency Frequency Monetary customerID ;
+run ;
+/* I have selected 5 number of clusters becuase the R-square value has increased significantly until 5 clusters 
+and there is no noticable increase after that */
+
+/*Create Tree Data*/ 
+
+proc tree data=cls_summ out=tree_summ ncl= 5 ;     
+copy customerID Recency Frequency Monetary; 
+run ;
+
+/* Graphs for Verification */
+
+proc sgplot data= tree_summ ;
+scatter x = Monetary y = Recency / group=cluster;
+run ; 
+
+proc sgplot data= tree_summ ;
+scatter x = Recency y = Frequency / group=cluster;
+run ; 
+
+proc sgplot data= tree_summ ;
+scatter x = Monetary y = Frequency / group=cluster;
+run ; 
+
+/* Non-Hierarchical Clustering - K-Means */
+/* K means */
+
+proc fastclus data=customer_summary out=kmean_summ maxclusters=5;
+var Recency Frequency Monetary;
+run;
+
+/* Graphs using K-means */
+
+proc sgplot data = kmean_summ;
+scatter x= Monetary y= Recency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run;
+
+proc sgplot data = kmean_summ ;
+scatter x = Recency y = Frequency / group=cluster; 
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run ;
+
+proc sgplot data = kmean_summ ;
+scatter x = Monetary y = Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run ;
+
+/* Compare the Differences */
+/* Hierarchical clustering has 4 densely packed clusters, whereas K means has 3 densely packed clusters for Resonance,Monetary graph and Frequency,Recency graph*/
+
+ 
+/*ANOVA Analysis for the Clusters*/
+
+proc anova data=kmean_summ ;
+class cluster ;
+model Frequency = cluster   ;
+means cluster / BON ;
+run ; 
+
+proc anova data=kmean_summ ;
+class cluster ;
+model Recency = cluster   ;
+means cluster / BON ;
+run ; 
+
+proc anova data=kmean_summ ;
+class cluster ;
+model Monetary = cluster   ;
+means cluster / BON ;
+run ; 
+
+/*Using Clusters as a group to analyze */
+/* Graphs with the group effect */
+
+title "Monetary and Recency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Monetary y= Recency / group=cluster;
+reg x=Monetary y=Recency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Recency and Fequency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Recency y= Frequency / group=cluster;
+reg x=Recency y=Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Monetary and Fequency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Monetary y= Frequency / group=cluster;
+reg x=Monetary y=Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+/* Graphs without the group effects */
+
+title "Monetary and Recency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Monetary y= Recency / group=cluster;
+reg x=Monetary y=Recency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Recency and Frequency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Recency y= Frequency / group=cluster;
+reg x=Recency y=Frequency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Monetary and Frequency Relation with Clusters" ;
+proc sgplot data=kmean_summ ;
+scatter x= Monetary y= Frequency / group=cluster;
+reg x=Monetary y=Frequency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+/* Naming Groups using Summary Statistics by Clusters */
+
+proc means data= kmean_summ;
+var Recency Frequency Monetary; class cluster ;
+output out= clusterstats;
+run;
+
+data cluster_names ; set kmean_summ ;
+if 0 <= Recency < 30 then Recency_Class = 'LOW RECENCY';
+   else if 30 <= Recency < 90 then Recency_Class = 'MID RECENCY';
+   else if Recency >= 90 then Recency_Class = 'HIGH RECENCY';
+if 0 <= Frequency < 5 then Frequency_Class = 'LOW FREQUENCY';
+   else if 5 <= Frequency < 10 then Frequency_Class = 'MID FREQUENCY';
+   else if Frequency >= 10 then Frequency_Class = 'HIGH FREQUENCY';
+if 0 <= Monetary < 6 then Monetary_Class = 'LOW MONETARY';
+   else if 6 <= Monetary < 8 then Monetary_Class = 'MID MONETARY';
+   else if Monetary >= 8 then Monetary_Class = 'HIGH MONETARY';
+   else if Monetary = ' ' OR Monetary < 0 then Monetary_Class = 'Missing Data' ;
+run ;
+proc freq data = cluster_names;
+tables Recency_Class Frequency_Class Monetary_Class;
+run ;
+
+/*Creating the item_summary table by applying proc sql query */
+PROC SQL;
+Create table item_summary as
+select distinct itemID,
+mean(L_Date - (Date)) as Recency ,
+count(InvoiceDate) as Frequency,
+log(Sum(totalsale)) as Monetary format=f5.2
+from sales1
+group by itemID;
+quit;
+
+proc means data= item_summary ; run ;
+
+/* Basic Graphs */
+
+proc sgplot data=item_summary ;
+scatter x = Monetary y = Recency;
+run ;
+
+proc sgplot data=item_summary ;
+scatter x = Recency y = Frequency;
+run ;
+
+proc sgplot data = item_summary ;
+scatter x = monetary y = frequency ; 
+run ;
+
+/* Check for and handle outliers if necessary */
+proc univariate data=item_summary;
+   var Recency Frequency Monetary;
+run;
+
+/*Hierarchical Clustering */
+
+proc cluster data= item_summary method=ward out = clsitsumm print=10 ccc pseudo;
+var Recency Frequency Monetary ;
+id itemID;
+copy Recency Frequency Monetary itemID ;
+run ;
+/* I chose 5 number of clusters becuase the R-square value has increased significantly till 5 clusters 
+and there is no noticable increase after that */
+
+/*Create Tree Data*/ 
+
+proc tree data=clsitsumm out=treeitsumm ncl= 5 ;     
+copy itemID Recency Frequency Monetary; 
+run ;
+
+/* Graphs for Verification */
+
+proc sgplot data= treeitsumm ;
+scatter x = Monetary y = Recency / group=cluster;
+run ; 
+
+proc sgplot data= treeitsumm ;
+scatter x = Recency y = Frequency / group=cluster;
+run ; 
+
+proc sgplot data= treeitsumm ;
+scatter x = Monetary y = Frequency / group=cluster;
+run ; 
+
+/* Non-Hierarchical Clustering - K-Means */
+/* K means */
+
+proc fastclus data=item_summary out=kmeanitsumm maxclusters=5;
+var Recency Frequency Monetary;
+run;
+
+/* Graphs using K-means */
+
+proc sgplot data = kmeanitsumm;
+scatter x= Monetary y= Recency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run;
+
+proc sgplot data = kmeanitsumm ;
+scatter x = Recency y = Frequency / group=cluster; 
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run ;
+
+proc sgplot data = kmeanitsumm ;
+scatter x = Monetary y = Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet) ;
+run ;
+
+/* Comparing the Differences*/
+/*The clusters in Hierachical clustering graph between Recency and Monetary is more densely packed as comapred to tge graph in K mean clustering*/
+ 
+/*ANOVA Analysis for the Clusters*/
+
+proc anova data=kmeanitsumm ;
+class cluster ;
+model Frequency = cluster   ;
+means cluster / BON ;
+run ; 
+
+proc anova data=kmeanitsumm ;
+class cluster ;
+model Recency = cluster   ;
+means cluster / BON ;
+run ; 
+
+proc anova data=kmeanitsumm ;
+class cluster ;
+model Monetary = cluster   ;
+means cluster / BON ;
+run ; 
+
+/*Using Clusters as a group to analyze */
+/* Graphs with the group effect */
+
+title "Monetary and Recency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Monetary y= Recency / group=cluster;
+reg x=Monetary y=Recency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Recency and Fequency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Recency y= Frequency / group=cluster;
+reg x=Recency y=Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Monetary and Fequency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Monetary y= Frequency / group=cluster;
+reg x=Monetary y=Frequency / group=cluster;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+/* Graphs without the group effects */
+
+title "Monetary and Recency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Monetary y= Recency / group=cluster;
+reg x=Monetary y=Recency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Recency and Frequency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Recency y= Frequency / group=cluster;
+reg x=Recency y=Frequency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+title "Monetary and Frequency Relation with Clusters" ;
+proc sgplot data=kmeanitsumm ;
+scatter x= Monetary y= Frequency / group=cluster;
+reg x=Monetary y=Frequency;
+styleattrs datacontrastcolors=(red blue green yellow violet ) ;
+run;
+
+/* Naming Groups using Summary Statistics by Clusters */
+
+proc means data= kmeanitsumm;
+var Recency Frequency Monetary; class cluster ;
+output out= clusteritstats;
+run;
+
+data cluster_itnames ; set kmeanitsumm ;
+if 0 <= Recency < 30 then Recency_Class = 'LOW RECENCY';
+   else if 30 <= Recency < 90 then Recency_Class = 'MID RECENCY';
+   else if Recency >= 90 then Recency_Class = 'HIGH RECENCY';
+if 0 <= Frequency < 50 then Frequency_Class = 'LOW FREQUENCY';
+   else if 50 <= Frequency < 100 then Frequency_Class = 'MID FREQUENCY';
+   else if Frequency >= 100 then Frequency_Class = 'HIGH FREQUENCY';
+if 0 <= Monetary < 6 then Monetary_Class = 'LOW MONETARY';
+   else if 6 <= Monetary < 8 then Monetary_Class = 'MID MONETARY';
+   else if Monetary >= 8 then Monetary_Class = 'HIGH MONETARY';
+   else if Monetary = ' ' OR Monetary < 0 then Monetary_Class = 'Missing Data' ;
+run ;
+proc freq data = cluster_itnames;
+tables Recency_Class Frequency_Class Monetary_Class;
+run ;

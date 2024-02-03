@@ -1,0 +1,69 @@
+/* Homework Assignment 1
+   student:Chanukya Bolli */
+
+/* 1) Import Data */
+filename webdata url
+  "https://bigblue.depaul.edu/jlee141/econdata/housing/mls2021_sample.csv" ;
+
+/* Create mymls */
+proc import datafile=webdata out=mymls dbms=csv replace ; run ;
+proc contents data=mymls ; run ;
+proc print data=mymls; run ;
+
+/* 2) Frequencies by zip code */
+proc freq data=mymls ;
+tables zip ;
+run ;
+
+/* 3) Create a SAS data set called "myhw1"*/
+Data myhw1 ; set mymls ;
+If ZIP = 60002 or ZIP = 60004 or zip=60012 ; run;
+proc print data = myhw1; run;
+/* a)Create a variable called the price per square feet:*/
+data Price_Sqft; set myhw1;
+Price_Sqft = HPRICE/SQFT ;
+run ;
+proc print data = price_sqft; run ;
+/* b)Create a variable called HPRICE_CLASS using conditional statement */
+data HPRICE_CLASS; set myhw1;
+if 0 <= HPRICE < 250000 then
+      CLASS = 'LOWER PRICE';
+   else if 250000 <= HPRICE < 550000 then
+      CLASS = 'MID PRICE';
+   else /* HPRICE >= 550000 */
+      CLASS = 'UPPER PRICE';   
+run;
+proc print data = HPRICE_CLASS; run;
+
+/* 4) Frequencies, means and summary for myhw1 Dataset */
+/* a) The frequencies of BEDROOM, FIREPLACE, and GARAGE by ZIP code. */
+proc freq data = myhw1;
+tables BEDROOM*zip FIREPLACE*zip GARAGE*zip;
+run;
+/* b) PROC MEANS, the descriptive statistics for all variables by ZIP code.*/
+proc means data=myhw1;
+by zip;
+run;
+/* c) SUMMARY, the mean, median, P5, P95, min, max for HPRICE and SQFT.*/
+proc summary data = myhw1 print n mean median P5 P95 min max ;
+var HPRICE; var SQFT;
+run;
+/* d) Repeat c. by ZIP code */
+proc summary data = myhw1 print n mean median P5 P95 min max ;
+var HPRICE; var SQFT; class zip ;
+run ;
+/* e) Repeat c. by HPRICE_CLASS */
+proc summary data =  HPRICE_CLASS print n mean median P5 P95 min max ;
+var HPRICE; var SQFT; class CLASS ;
+run ; 
+
+/* 5) Graphs */
+/* a) Scatter plot between LOG_PRICE and LOG_SQFT for each ZIP Code*/
+proc sgplot data = myhw1;
+scatter x=LOG_PRICE y=LOG_SQFT/group=zip ; 
+run;
+/* b) Bar Chart for BEDROOM, FIREPLACE, and GARAGE for each ZIP code*/
+proc sgplot data = myhw1 ; vbar BEDROOM/group = zip; run;
+proc sgplot data = myhw1 ; vbar GARAGE/group = zip; run;
+proc sgplot data = myhw1 ; vbar FIREPLACE/group = zip; run;
+
